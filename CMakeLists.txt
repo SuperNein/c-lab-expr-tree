@@ -16,6 +16,7 @@ add_executable(expr
         src/parser.c
         src/token.c
         src/tokenizer.c
+        src/poly.c
 )
 
 target_compile_options(expr PRIVATE

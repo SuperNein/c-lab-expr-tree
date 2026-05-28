@@ -8,6 +8,7 @@
 #include "tokenizer.h"
 #include "tok_vector.h"
 #include "expr_tree.h"
+#include "poly.h"
 
 #define MAX_LINE_LENGTH 256
 
@@ -67,11 +68,9 @@ static int input_interface(
 static void process_expression(
     const char *expr
 ) {
-    TokVector tokens =
-        tok_vector_create();
+    TokVector tokens = tok_vector_create();
 
-    ErrorCode tok_err =
-        tokenize(expr, &tokens);
+    ErrorCode tok_err = tokenize(expr, &tokens);
 
     if (tok_err != ERR_OK) {
         fprintf(
@@ -85,8 +84,7 @@ static void process_expression(
         return;
     }
 
-    ParseResult result =
-        parse(&tokens);
+    ParseResult result = parse(&tokens);
 
     if (result.error != ERR_OK) {
         fprintf(
@@ -102,7 +100,7 @@ static void process_expression(
 
     expr_print_tree(
         stdout,
-        result.tree
+        poly_expand(result.tree)
     );
 
     expr_tree_destroy(result.tree);
