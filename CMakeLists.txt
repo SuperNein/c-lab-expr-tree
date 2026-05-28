@@ -3,32 +3,21 @@ project(expr C)
 
 set(CMAKE_C_STANDARD 23)
 
-include_directories(include)
-
-add_executable(expr
-        src/main.c
-        src/expr_queue.c
-        src/tok_stack.c
-        src/expr_tree.c
-        src/tok_vector.c
-        src/expr_stack.c
-        src/printer.c
-        src/parser.c
-        src/token.c
-        src/tokenizer.c
-        src/poly.c
+file(GLOB SRC_FILES CONFIGURE_DEPENDS
+        src/*.c
 )
 
-target_link_libraries(expr m)
+add_executable(expr ${SRC_FILES})
+
+target_include_directories(expr PRIVATE include)
+
+target_link_libraries(expr PRIVATE m)
 
 target_compile_options(expr PRIVATE
         -Wall
         -Wextra
         -Werror
-)
-
-add_custom_target(run_file
-        COMMAND expr tests/input.txt
-        DEPENDS expr
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        -pedantic
+        $<$<CONFIG:Debug>:-g3>
+        $<$<CONFIG:Debug>:-O0>
 )

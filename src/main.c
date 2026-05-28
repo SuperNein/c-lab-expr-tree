@@ -14,10 +14,11 @@
 
 
 static int read_line(
+    FILE *stream,
     char *buffer,
     const size_t size
 ) {
-    if (fgets(buffer, size, stdin) == NULL) {
+    if (fgets(buffer, size, stream) == NULL) {
         return 0;
     }
 
@@ -39,11 +40,12 @@ static int read_line(
 
 
 static int input_interface(
+    FILE *stream,
     char *line,
     const size_t size,
     const int index
 ) {
-    if (isatty(STDIN_FILENO)) {
+    if (stream == stdin && isatty(STDIN_FILENO)) {
         printf(
             "Enter polynomial %d: ",
             index
@@ -52,7 +54,11 @@ static int input_interface(
         fflush(stdout);
     }
 
-    if (!read_line(line, size)) {
+    if (!read_line(
+        stream,
+        line,
+        size
+    )) {
         fprintf(
             stderr,
             "Failed to read input.\n"
@@ -100,7 +106,7 @@ static void process_expression(
 
     expr_print_tree(
         stdout,
-        poly_simplify_constants(result.tree)
+        poly_normalize(result.tree)
     );
 
     expr_tree_destroy(result.tree);
@@ -108,23 +114,48 @@ static void process_expression(
 }
 
 
-int main(void) {
+int main(
+    const int argc,
+    char *argv[]
+) {
+    FILE *input = stdin;
+
+    if (argc > 1) {
+        input = fopen(argv[1], "r");
+
+        if (input == NULL) {
+            perror("fopen");
+
+            return 1;
+        }
+    }
+
     char line1[MAX_LINE_LENGTH];
     char line2[MAX_LINE_LENGTH];
 
     if (!input_interface(
+        input,
         line1,
         MAX_LINE_LENGTH,
         1
     )) {
+        if (input != stdin) {
+            fclose(input);
+        }
+
         return 1;
     }
 
     if (!input_interface(
+        input,
         line2,
         MAX_LINE_LENGTH,
         2
     )) {
+        if (input != stdin) {
+            fclose(input);
+        }
+
         return 1;
     }
 
@@ -133,6 +164,10 @@ int main(void) {
 
     printf("\nExpression 2 tree:\n\n");
     process_expression(line2);
+
+    if (input != stdin) {
+        fclose(input);
+    }
 
     return 0;
 }
