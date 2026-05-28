@@ -19,6 +19,8 @@ add_executable(expr
         src/poly.c
 )
 
+target_link_libraries(expr m)
+
 target_compile_options(expr PRIVATE
         -Wall
         -Wextra

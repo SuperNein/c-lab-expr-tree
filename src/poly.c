@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stddef.h>
 
 #include "poly.h"
@@ -110,6 +111,169 @@ ExprTree poly_expand(const ExprTree tree) {
 
     return expr_tree_make(
         tree->token,
+        left,
+        right
+    );
+}
+
+
+static bool root_is_value(ExprTree tree) {
+    return tree != NULL && tok_is_value(tree->token);
+}
+
+
+static double root_value(ExprTree tree) {
+    return tree->token.data.value;
+}
+
+
+static ExprTree create_value(const double value) {
+    return expr_tree_create(
+        tok_create_value(value)
+    );
+}
+
+ExprTree poly_simplify_constants(const ExprTree tree) {
+    if (tree == NULL) {
+        return NULL;
+    }
+
+    if (expr_tree_is_leaf(tree)) {
+        return expr_tree_copy(tree);
+    }
+
+    ExprTree left = poly_simplify_constants(tree->left);
+    ExprTree right = poly_simplify_constants(tree->right);
+
+    char op = tree->token.data.op;
+
+    if (
+        root_is_value(left)
+        && root_is_value(right)
+    ) {
+        double a = root_value(left);
+        double b = root_value(right);
+
+        double result = 0;
+
+        switch (op) {
+            case '+':
+                result = a + b;
+                break;
+
+            case '-':
+                result = a - b;
+                break;
+
+            case '*':
+                result = a * b;
+                break;
+
+            case '/':
+                result = a / b;
+                break;
+
+            case '^':
+                result = pow(a, b);
+                break;
+
+            default:
+                return create_binary(
+                    op,
+                    left,
+                    right
+                );
+        }
+
+        expr_tree_destroy(left);
+        expr_tree_destroy(right);
+
+        return create_value(result);
+    }
+
+    if (op == '*') {
+        if (
+            root_is_value(left)
+            && root_value(left) == 0
+        ) {
+            expr_tree_destroy(left);
+            expr_tree_destroy(right);
+
+            return create_value(0);
+        }
+
+        if (
+            root_is_value(right)
+            && root_value(right) == 0
+        ) {
+            expr_tree_destroy(left);
+            expr_tree_destroy(right);
+
+            return create_value(0);
+        }
+
+        if (
+            root_is_value(left)
+            && root_value(left) == 1
+        ) {
+            expr_tree_destroy(left);
+
+            return right;
+        }
+
+        if (
+            root_is_value(right)
+            && root_value(right) == 1
+        ) {
+            expr_tree_destroy(right);
+
+            return left;
+        }
+    }
+
+    if (op == '+') {
+        if (
+            root_is_value(left)
+            && root_value(left) == 0
+        ) {
+            expr_tree_destroy(left);
+
+            return right;
+        }
+
+        if (
+            root_is_value(right)
+            && root_value(right) == 0
+        ) {
+            expr_tree_destroy(right);
+
+            return left;
+        }
+    }
+
+    if (op == '^') {
+        if (
+            root_is_value(right)
+            && root_value(right) == 0
+        ) {
+            expr_tree_destroy(left);
+            expr_tree_destroy(right);
+
+            return create_value(1);
+        }
+
+        if (
+            root_is_value(right)
+            && root_value(right) == 1
+        ) {
+            expr_tree_destroy(right);
+
+            return left;
+        }
+    }
+
+    return create_binary(
+        op,
         left,
         right
     );

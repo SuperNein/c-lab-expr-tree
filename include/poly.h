@@ -5,6 +5,6 @@
 
 
 ExprTree poly_expand(const ExprTree tree);
-ExprTree poly_simplify(const ExprTree tree);
+ExprTree poly_simplify_constants(const ExprTree tree);
 
 #endif

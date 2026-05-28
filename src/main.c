@@ -100,7 +100,7 @@ static void process_expression(
 
     expr_print_tree(
         stdout,
-        poly_expand(result.tree)
+        poly_simplify_constants(result.tree)
     );
 
     expr_tree_destroy(result.tree);
