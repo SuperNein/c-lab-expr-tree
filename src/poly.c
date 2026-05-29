@@ -541,6 +541,26 @@ static ExprTree simplify_expr(ExprTree tree) {
                 return make_number(0);
             }
 
+            if (is_const_value(left, -1)) {
+                expr_tree_destroy(left);
+
+                return make_operator(
+                    '~',
+                    right,
+                    NULL
+                );
+            }
+
+            if (is_const_value(right, -1)) {
+                expr_tree_destroy(right);
+
+                return make_operator(
+                    '~',
+                    left,
+                    NULL
+                );
+            }
+
             if (is_one(left)) {
                 expr_tree_destroy(left);
 
@@ -583,6 +603,31 @@ static ExprTree simplify_expr(ExprTree tree) {
 
 
 void poly_normalize(Polynomial *poly) {
+    for (
+        size_t i = 0;
+        i < poly->size;
+        ++i
+    ) {
+        ExprTree coef = expr_vector_get(
+                poly,
+                i
+            );
+
+        if (!coef) {
+            continue;
+        }
+
+        ExprTree simplified = simplify_expr(coef);
+
+        expr_tree_destroy(coef);
+
+        expr_vector_set(
+            poly,
+            i,
+            simplified
+        );
+    }
+
     while (
         poly->size > 0 &&
         expr_vector_get(
