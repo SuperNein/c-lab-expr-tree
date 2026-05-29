@@ -2,13 +2,28 @@
 #define POLY_H
 
 #include "expr_tree.h"
+#include "expr_vector.h"
 
 
-ExprTree poly_expand(const ExprTree tree);
+typedef ExprVector Polynomial;
 
-ExprTree poly_simplify_constants(const ExprTree tree);
-ExprTree poly_simplify_algebraic(const ExprTree tree);
+Polynomial poly_from_expr(ExprTree tree);
 
-ExprTree poly_normalize(const ExprTree tree);
+Polynomial poly_add(
+    const Polynomial *a,
+    const Polynomial *b
+);
+
+Polynomial poly_mul(
+    const Polynomial *a,
+    const Polynomial *b
+);
+
+Polynomial poly_pow(
+    const Polynomial *p,
+    int power
+);
+
+void poly_normalize(Polynomial *p);
 
 #endif

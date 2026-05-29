@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "expr_tree.h"
+#include "expr_vector.h"
 
 
 void expr_print(

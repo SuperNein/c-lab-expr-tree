@@ -1,21 +1,16 @@
-#include <math.h>
-#include <stddef.h>
 #include <string.h>
 
 #include "poly.h"
 
 
-static bool root_is_operator(
-    ExprTree tree,
-    const char op
-) {
-    return tree != NULL
-        && tok_is_operator(tree->token)
-        && tree->token.data.op == op;
+static ExprTree make_number(const double value) {
+    return expr_tree_create(
+        tok_create_value(value)
+    );
 }
 
 
-static ExprTree create_binary(
+static ExprTree make_operator(
     const char op,
     ExprTree left,
     ExprTree right
@@ -28,426 +23,338 @@ static ExprTree create_binary(
 }
 
 
-static ExprTree expand_mul(
-    ExprTree left,
-    ExprTree right
+static bool is_x(const Token tok) {
+    return tok_is_name(tok)
+        && strcmp(tok.data.name, "x") == 0;
+}
+
+
+static void poly_ensure_size(
+    Polynomial *poly,
+    const size_t size
 ) {
-    if (root_is_operator(left, '+')) {
-        ExprTree ac = poly_expand(
-            create_binary(
-                '*',
-                expr_tree_copy(left->left),
-                expr_tree_copy(right)
-            )
-        );
-
-        ExprTree bc = poly_expand(
-            create_binary(
-                '*',
-                expr_tree_copy(left->right),
-                expr_tree_copy(right)
-            )
-        );
-
-        return create_binary(
-            '+',
-            ac,
-            bc
-        );
+    while (poly->size < size) {
+        expr_vector_push(poly, NULL);
     }
-
-    if (root_is_operator(right, '+')) {
-        ExprTree ab = poly_expand(
-            create_binary(
-                '*',
-                expr_tree_copy(left),
-                expr_tree_copy(right->left)
-            )
-        );
-
-        ExprTree ac = poly_expand(
-            create_binary(
-                '*',
-                expr_tree_copy(left),
-                expr_tree_copy(right->right)
-            )
-        );
-
-        return create_binary(
-            '+',
-            ab,
-            ac
-        );
-    }
-
-    return create_binary(
-        '*',
-        left,
-        right
-    );
 }
 
 
-ExprTree poly_expand(const ExprTree tree) {
-    if (tree == NULL) {
+static ExprTree poly_get_safe(
+    const Polynomial *poly,
+    const size_t index
+) {
+    if (index >= poly->size) {
         return NULL;
     }
 
-    if (expr_tree_is_leaf(tree)) {
-        return expr_tree_copy(tree);
-    }
+    return expr_vector_get(poly, index);
+}
 
-    ExprTree left =
-        poly_expand(tree->left);
 
-    ExprTree right =
-        poly_expand(tree->right);
+Polynomial poly_add(
+    const Polynomial *a,
+    const Polynomial *b
+) {
+    Polynomial result =
+        expr_vector_create();
 
-    if (root_is_operator(tree, '*')) {
-        return expand_mul(
-            left,
-            right
-        );
-    }
+    const size_t max_size =
+        a->size > b->size
+        ? a->size
+        : b->size;
 
-    return expr_tree_make(
-        tree->token,
-        left,
-        right
+    poly_ensure_size(
+        &result,
+        max_size
     );
-}
 
+    for (size_t i = 0; i < max_size; ++i) {
 
-static bool root_is_value(ExprTree tree) {
-    return tree != NULL && tok_is_value(tree->token);
-}
+        ExprTree left = poly_get_safe(a, i);
+        ExprTree right = poly_get_safe(b, i);
 
-
-static double root_value(ExprTree tree) {
-    return tree->token.data.value;
-}
-
-
-static ExprTree create_value(const double value) {
-    return expr_tree_create(
-        tok_create_value(value)
-    );
-}
-
-ExprTree poly_simplify_constants(const ExprTree tree) {
-    if (tree == NULL) {
-        return NULL;
+        if (left && right) {
+            expr_vector_set(
+                &result,
+                i,
+                make_operator(
+                    '+',
+                    expr_tree_copy(left),
+                    expr_tree_copy(right)
+                )
+            );
+        }
+        else if (left) {
+            expr_vector_set(
+                &result,
+                i,
+                expr_tree_copy(left)
+            );
+        }
+        else if (right) {
+            expr_vector_set(
+                &result,
+                i,
+                expr_tree_copy(right)
+            );
+        }
     }
 
-    if (expr_tree_is_leaf(tree)) {
-        return expr_tree_copy(tree);
-    }
+    return result;
+}
 
-    ExprTree left = poly_simplify_constants(tree->left);
-    ExprTree right = poly_simplify_constants(tree->right);
 
-    char op = tree->token.data.op;
+Polynomial poly_mul(
+    const Polynomial *a,
+    const Polynomial *b
+) {
+    Polynomial result = expr_vector_create();
 
     if (
-        root_is_value(left)
-        && root_is_value(right)
+        a->size == 0 ||
+        b->size == 0
     ) {
-        double a = root_value(left);
-        double b = root_value(right);
+        return result;
+    }
 
-        double result = 0;
+    poly_ensure_size(
+        &result,
+        a->size + b->size - 1
+    );
 
-        switch (op) {
+    for (size_t i = 0; i < a->size; ++i) {
+        ExprTree left = expr_vector_get(a, i);
+
+        if (!left) {
+            continue;
+        }
+
+        for (size_t j = 0; j < b->size; ++j) {
+            ExprTree right = expr_vector_get(b, j);
+
+            if (!right) {
+                continue;
+            }
+
+            ExprTree product = make_operator(
+                    '*',
+                    expr_tree_copy(left),
+                    expr_tree_copy(right)
+                );
+
+            ExprTree current = expr_vector_get(
+                    &result,
+                    i + j
+                );
+
+            if (!current) {
+                expr_vector_set(
+                    &result,
+                    i + j,
+                    product
+                );
+            }
+            else {
+                expr_vector_set(
+                    &result,
+                    i + j,
+                    make_operator(
+                        '+',
+                        current,
+                        product
+                    )
+                );
+            }
+        }
+    }
+
+    return result;
+}
+
+
+Polynomial poly_pow(
+    const Polynomial *poly,
+    const int power
+) {
+    Polynomial result = expr_vector_create();
+
+    poly_ensure_size(
+        &result,
+        1
+    );
+
+    expr_vector_set(
+        &result,
+        0,
+        make_number(1)
+    );
+
+    for (int i = 0; i < power; ++i) {
+        Polynomial temp = poly_mul(
+                &result,
+                poly
+            );
+
+        expr_vector_destroy(&result);
+
+        result = temp;
+    }
+
+    return result;
+}
+
+
+Polynomial poly_from_expr(ExprTree tree) {
+    Polynomial result = expr_vector_create();
+
+    if (!tree) {
+        return result;
+    }
+
+    Token tok = tree->token;
+
+    // const
+    if (
+        tok_is_value(tok) ||
+        (
+            tok_is_name(tok) &&
+            !is_x(tok)
+        )
+    ) {
+        poly_ensure_size(
+            &result,
+            1
+        );
+
+        expr_vector_set(
+            &result,
+            0,
+            expr_tree_copy(tree)
+        );
+
+        return result;
+    }
+
+    // x
+    if (is_x(tok)) {
+        poly_ensure_size(
+            &result,
+            2
+        );
+
+        expr_vector_set(
+            &result,
+            1,
+            make_number(1)
+        );
+
+        return result;
+    }
+
+    // oper
+    if (tok_is_operator(tok)) {
+        Polynomial left = poly_from_expr(
+                tree->left
+            );
+
+        Polynomial right = poly_from_expr(
+                tree->right
+            );
+
+        switch (tok.data.op) {
             case '+':
-                result = a + b;
-                break;
+                return poly_add(
+                    &left,
+                    &right
+                );
 
-            case '-':
-                result = a - b;
-                break;
+            case '-': {
+
+                Polynomial neg = expr_vector_create();
+
+                poly_ensure_size(
+                    &neg,
+                    right.size
+                );
+
+                for (
+                    size_t i = 0;
+                    i < right.size;
+                    ++i
+                ) {
+
+                    ExprTree coef = expr_vector_get(
+                            &right,
+                            i
+                        );
+
+                    if (!coef) {
+                        continue;
+                    }
+
+                    expr_vector_set(
+                        &neg,
+                        i,
+                        make_operator(
+                            '*',
+                            make_number(-1),
+                            expr_tree_copy(coef)
+                        )
+                    );
+                }
+
+                return poly_add(
+                    &left,
+                    &neg
+                );
+            }
 
             case '*':
-                result = a * b;
-                break;
+                return poly_mul(
+                    &left,
+                    &right
+                );
 
-            case '/':
-                result = a / b;
-                break;
+            case '^': {
+                if (
+                    !tree->right ||
+                    !tok_is_value(
+                        tree->right->token
+                    )
+                ) {
+                    return result;
+                }
 
-            case '^':
-                result = pow(a, b);
-                break;
+                int power =
+                    (int)
+                    tree->right
+                        ->token
+                        .data
+                        .value;
+
+                return poly_pow(
+                    &left,
+                    power
+                );
+            }
 
             default:
-                return create_binary(
-                    op,
-                    left,
-                    right
-                );
-        }
-
-        expr_tree_destroy(left);
-        expr_tree_destroy(right);
-
-        return create_value(result);
-    }
-
-    if (op == '*') {
-        if (
-            root_is_value(left)
-            && root_value(left) == 0
-        ) {
-            expr_tree_destroy(left);
-            expr_tree_destroy(right);
-
-            return create_value(0);
-        }
-
-        if (
-            root_is_value(right)
-            && root_value(right) == 0
-        ) {
-            expr_tree_destroy(left);
-            expr_tree_destroy(right);
-
-            return create_value(0);
-        }
-
-        if (
-            root_is_value(left)
-            && root_value(left) == 1
-        ) {
-            expr_tree_destroy(left);
-
-            return right;
-        }
-
-        if (
-            root_is_value(right)
-            && root_value(right) == 1
-        ) {
-            expr_tree_destroy(right);
-
-            return left;
+                return result;
         }
     }
 
-    if (op == '+') {
-        if (
-            root_is_value(left)
-            && root_value(left) == 0
-        ) {
-            expr_tree_destroy(left);
-
-            return right;
-        }
-
-        if (
-            root_is_value(right)
-            && root_value(right) == 0
-        ) {
-            expr_tree_destroy(right);
-
-            return left;
-        }
-    }
-
-    if (op == '^') {
-        if (
-            root_is_value(right)
-            && root_value(right) == 0
-        ) {
-            expr_tree_destroy(left);
-            expr_tree_destroy(right);
-
-            return create_value(1);
-        }
-
-        if (
-            root_is_value(right)
-            && root_value(right) == 1
-        ) {
-            expr_tree_destroy(right);
-
-            return left;
-        }
-    }
-
-    return create_binary(
-        op,
-        left,
-        right
-    );
+    return result;
 }
 
 
-static bool same_variable(
-    ExprTree a,
-    ExprTree b
-) {
-    if (
-        a == NULL
-        || b == NULL
+void poly_normalize(Polynomial *poly) {
+    while (
+        poly->size > 0 &&
+        expr_vector_get(
+            poly,
+            poly->size - 1
+        ) == NULL
     ) {
-        return false;
+        poly->size--;
     }
-
-    if (
-        !tok_is_name(a->token)
-        || !tok_is_name(b->token)
-    ) {
-        return false;
-    }
-
-    return strcmp(
-        a->token.data.name,
-        b->token.data.name
-    ) == 0;
-}
-
-ExprTree poly_simplify_algebraic(const ExprTree tree) {
-    if (tree == NULL) {
-        return NULL;
-    }
-
-    if (expr_tree_is_leaf(tree)) {
-        return expr_tree_copy(tree);
-    }
-
-    ExprTree left = poly_simplify_algebraic(
-            tree->left
-        );
-
-    ExprTree right = poly_simplify_algebraic(
-            tree->right
-        );
-
-    char op = tree->token.data.op;
-
-    if (op == '*') {
-        // x * x -> x^2
-        if (same_variable(left, right)) {
-            ExprTree result = create_binary(
-                    '^',
-                    expr_tree_copy(left),
-                    create_value(2)
-                );
-
-            expr_tree_destroy(left);
-            expr_tree_destroy(right);
-
-            return result;
-        }
-
-        // x^a * x -> x^(a+1)
-        if (
-            root_is_operator(left, '^')
-            && tok_is_name(left->left->token)
-            && same_variable(
-                left->left,
-                right
-            )
-            && root_is_value(left->right)
-        ) {
-            double power = root_value(left->right);
-
-            ExprTree result = create_binary(
-                    '^',
-                    expr_tree_copy(
-                        left->left
-                    ),
-                    create_value(
-                        power + 1
-                    )
-                );
-
-            expr_tree_destroy(left);
-            expr_tree_destroy(right);
-
-            return result;
-        }
-
-        // x * x^a -> x^(a+1)
-        if (
-            root_is_operator(right, '^')
-            && tok_is_name(right->left->token)
-            && same_variable(
-                left,
-                right->left
-            )
-            && root_is_value(right->right)
-        ) {
-            double power = root_value(right->right);
-
-            ExprTree result = create_binary(
-                    '^',
-                    expr_tree_copy(
-                        right->left
-                    ),
-                    create_value(
-                        power + 1
-                    )
-                );
-
-            expr_tree_destroy(left);
-            expr_tree_destroy(right);
-
-            return result;
-        }
-
-        // x^a * x^b -> x^(a+b)
-        if (
-            root_is_operator(left, '^')
-            && root_is_operator(right, '^')
-            && same_variable(
-                left->left,
-                right->left
-            )
-            && root_is_value(left->right)
-            && root_is_value(right->right)
-        ) {
-            double a = root_value(left->right);
-            double b = root_value(right->right);
-
-            ExprTree result = create_binary(
-                    '^',
-                    expr_tree_copy(
-                        left->left
-                    ),
-                    create_value(a + b)
-                );
-
-            expr_tree_destroy(left);
-            expr_tree_destroy(right);
-
-            return result;
-        }
-    }
-
-    return create_binary(
-        op,
-        left,
-        right
-    );
-}
-
-ExprTree poly_normalize(const ExprTree tree) {
-    if (tree == NULL) {
-        return NULL;
-    }
-
-    ExprTree expanded = poly_expand(tree);
-
-    ExprTree simplified = poly_simplify_constants(
-            expanded
-        );
-
-    ExprTree algebraic = poly_simplify_algebraic(
-            simplified
-        );
-
-    expr_tree_destroy(expanded);
-    expr_tree_destroy(simplified);
-
-    return algebraic;
 }
