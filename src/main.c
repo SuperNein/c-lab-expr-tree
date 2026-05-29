@@ -71,9 +71,7 @@ static int input_interface(
 }
 
 
-static void process_expression(
-    const char *expr
-) {
+static Polynomial process_expression(const char *expr) {
     TokVector tokens = tok_vector_create();
 
     ErrorCode tok_err = tokenize(expr, &tokens);
@@ -87,7 +85,7 @@ static void process_expression(
 
         tok_vector_destroy(&tokens);
 
-        return;
+        return expr_vector_create();
     }
 
     ParseResult result = parse(&tokens);
@@ -101,7 +99,7 @@ static void process_expression(
 
         tok_vector_destroy(&tokens);
 
-        return;
+        return expr_vector_create();
     }
 
     Polynomial poly = poly_from_expr(result.tree);
@@ -115,11 +113,12 @@ static void process_expression(
 
     printf("\n");
 
-    expr_vector_destroy(&poly);
-
     expr_tree_destroy(result.tree);
     tok_vector_destroy(&tokens);
+
+    return poly;
 }
+
 
 int main(
     const int argc,
@@ -166,11 +165,35 @@ int main(
         return 1;
     }
 
-    printf("\nExpression 1 tree:\n\n");
-    process_expression(line1);
+    printf("\nExpression 1:\n");
 
-    printf("\nExpression 2 tree:\n\n");
-    process_expression(line2);
+    Polynomial poly1 = process_expression(line1);
+
+    printf("\nExpression 2:\n");
+
+    Polynomial poly2 = process_expression(line2);
+
+    Polynomial result = poly_mul(
+            &poly1,
+            &poly2
+        );
+
+    poly_normalize(&result);
+
+    printf(
+        "\nMultiplication result:\n"
+    );
+
+    print_poly(
+        stdout,
+        result
+    );
+
+    printf("\n");
+
+    expr_vector_destroy(&poly1);
+    expr_vector_destroy(&poly2);
+    expr_vector_destroy(&result);
 
     if (input != stdin) {
         fclose(input);
