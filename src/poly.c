@@ -29,6 +29,34 @@ static bool is_x(const Token tok) {
         && strcmp(tok.data.name, "x") == 0;
 }
 
+static bool is_const_value(
+    ExprTree tree,
+    const double value
+) {
+    return tree
+        && tok_is_value(tree->token)
+        && tree->token.data.value == value;
+}
+
+
+static bool is_zero(
+    ExprTree tree
+) {
+    return is_const_value(
+        tree,
+        0
+    );
+}
+
+
+static bool is_one(
+    ExprTree tree
+) {
+    return is_const_value(
+        tree,
+        1
+    );
+}
 
 static void poly_ensure_size(
     Polynomial *poly,
@@ -395,6 +423,162 @@ Polynomial poly_from_expr(ExprTree tree) {
     }
 
     return result;
+}
+
+
+static ExprTree simplify_expr(ExprTree tree) {
+    if (!tree) {
+        return NULL;
+    }
+
+    Token tok = tree->token;
+
+    if (
+        tok_is_value(tok)
+        || tok_is_name(tok)
+    ) {
+        return expr_tree_copy(tree);
+    }
+
+    ExprTree left = simplify_expr(tree->left);
+    ExprTree right = simplify_expr(tree->right);
+
+    // unary
+    if (
+        tok_is_operator(tok)
+        && tok.data.op == '~'
+    ) {
+        if (
+            left &&
+            tok_is_value(left->token)
+        ) {
+            double value = left->token.data.value;
+
+            expr_tree_destroy(left);
+
+            return make_number(-value);
+        }
+
+        return make_operator(
+            '~',
+            left,
+            NULL
+        );
+    }
+
+    if (!tok_is_operator(tok)) {
+        expr_tree_destroy(left);
+        expr_tree_destroy(right);
+
+        return expr_tree_copy(tree);
+    }
+
+    char op = tok.data.op;
+
+    // constant
+    if (
+        left
+        && right
+        && tok_is_value(left->token)
+        && tok_is_value(right->token)
+    ) {
+        double a = left->token.data.value;
+
+        double b = right->token.data.value;
+
+        expr_tree_destroy(left);
+        expr_tree_destroy(right);
+
+        switch (op) {
+            case '+':
+                return make_number(a + b);
+
+            case '-':
+                return make_number(a - b);
+
+            case '*':
+                return make_number(a * b);
+
+            case '^':
+                return make_number(
+                    pow(a, b)
+                );
+        }
+    }
+
+    switch (op) {
+        case '+': {
+            if (is_zero(left)) {
+                expr_tree_destroy(left);
+                return right;
+            }
+
+            if (is_zero(right)) {
+                expr_tree_destroy(right);
+                return left;
+            }
+
+            break;
+        }
+
+        case '-': {
+            if (is_zero(right)) {
+                expr_tree_destroy(right);
+                return left;
+            }
+
+            break;
+        }
+
+        case '*': {
+            if (
+                is_zero(left)
+                || is_zero(right)
+            ) {
+                expr_tree_destroy(left);
+                expr_tree_destroy(right);
+
+                return make_number(0);
+            }
+
+            if (is_one(left)) {
+                expr_tree_destroy(left);
+
+                return right;
+            }
+
+            if (is_one(right)) {
+                expr_tree_destroy(right);
+
+                return left;
+            }
+
+            break;
+        }
+
+        case '^': {
+            if (is_zero(right)) {
+                expr_tree_destroy(left);
+                expr_tree_destroy(right);
+
+                return make_number(1);
+            }
+
+            if (is_one(right)) {
+                expr_tree_destroy(right);
+
+                return left;
+            }
+
+            break;
+        }
+    }
+
+    return make_operator(
+        op,
+        left,
+        right
+    );
 }
 
 
