@@ -104,15 +104,22 @@ static void process_expression(
         return;
     }
 
-    expr_print_tree(
+    Polynomial poly = poly_from_expr(result.tree);
+
+    poly_normalize(&poly);
+
+    print_poly(
         stdout,
-        poly_normalize(result.tree)
+        poly
     );
+
+    printf("\n");
+
+    expr_vector_destroy(&poly);
 
     expr_tree_destroy(result.tree);
     tok_vector_destroy(&tokens);
 }
-
 
 int main(
     const int argc,

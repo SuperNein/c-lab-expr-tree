@@ -3,94 +3,6 @@
 #include "printer.h"
 
 
-static void print_expr_impl(
-    FILE *stream,
-    ExprTree tree,
-    int parent_prec
-) {
-    if (tree == NULL) {
-        return;
-    }
-
-    Token tok = tree->token;
-
-    if (!tok_is_operator(tok)) {
-        tok_print(tok);
-        return;
-    }
-
-    int prec = tok_precedence(tok);
-
-    bool need_paren =
-        prec < parent_prec;
-
-    if (need_paren) {
-        fprintf(stream, "(");
-    }
-
-    if (tok.data.op == '~') {
-        fprintf(stream, "-");
-
-        print_expr_impl(
-            stream,
-            tree->right,
-            prec
-        );
-    }
-    else {
-        print_expr_impl(
-            stream,
-            tree->left,
-            prec
-        );
-
-        if (tok.data.op == '~') {
-            fprintf(stream, "-");
-        }
-        else {
-            tok_print(tok);
-        }
-
-        int right_prec = prec;
-
-        if (
-            tok.data.op == '^'
-            || tok.data.op == '-'
-            || tok.data.op == '/'
-        ) {
-            right_prec++;
-        }
-
-        print_expr_impl(
-            stream,
-            tree->right,
-            right_prec
-        );
-    }
-
-    if (need_paren) {
-        fprintf(stream, ")");
-    }
-}
-
-
-void expr_print(
-    FILE *stream,
-    ExprTree tree
-) {
-    if (tree == NULL) {
-        fprintf(stream, "(empty)");
-        return;
-    }
-
-    print_expr_impl(
-        stream,
-        tree,
-        0
-    );
-}
-
-
 static void print_tree_impl(
     FILE *stream,
     ExprTree tree,
@@ -152,7 +64,7 @@ static void print_tree_impl(
 }
 
 
-void expr_print_tree(
+void print_expr_tree(
     FILE *stream,
     ExprTree tree
 ) {
@@ -185,4 +97,126 @@ void expr_print_tree(
         "",
         false
     );
+}
+
+void print_expr_inline(
+    FILE *stream,
+    ExprTree tree
+) {
+    if (tree == NULL) {
+        return;
+    }
+
+    Token tok = tree->token;
+
+    if (tok_is_value(tok)) {
+        fprintf(
+            stream,
+            "%g",
+            tok.data.value
+        );
+
+        return;
+    }
+
+    if (tok_is_name(tok)) {
+        fprintf(
+            stream,
+            "%s",
+            tok.data.name
+        );
+
+        return;
+    }
+
+    if (tok_is_operator(tok)) {
+        // unary
+        if (tok.data.op == '~') {
+            fprintf(stream, "-");
+
+            print_expr_inline(
+                stream,
+                tree->left
+            );
+
+            return;
+        }
+
+        fprintf(stream, "(");
+
+        print_expr_inline(
+            stream,
+            tree->left
+        );
+
+        fprintf(
+            stream,
+            " %c ",
+            tok.data.op
+        );
+
+        print_expr_inline(
+            stream,
+            tree->right
+        );
+
+        fprintf(stream, ")");
+
+        return;
+    }
+}
+
+void print_poly(
+    FILE *stream,
+    Polynomial poly
+) {
+    bool first = true;
+
+    for (
+        size_t i = poly.size;
+        i > 0;
+        --i
+    ) {
+        const size_t power = i - 1;
+
+        ExprTree coef = expr_vector_get(
+                &poly,
+                power
+            );
+
+        if (!coef) {
+            continue;
+        }
+
+        if (!first) {
+            fprintf(stream, " + ");
+        }
+
+        first = false;
+
+        fprintf(stream, "(");
+
+        print_expr_inline(
+            stream,
+            coef
+        );
+
+        fprintf(stream, ")");
+
+        if (power > 0) {
+            fprintf(stream, "x");
+
+            if (power > 1) {
+                fprintf(
+                    stream,
+                    "^%zu",
+                    power
+                );
+            }
+        }
+    }
+
+    if (first) {
+        fprintf(stream, "0");
+    }
 }

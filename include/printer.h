@@ -4,15 +4,20 @@
 #include <stdio.h>
 
 #include "expr_tree.h"
-#include "expr_vector.h"
+#include "poly.h"
 
 
-void expr_print(
+void print_poly(
+    FILE *stream,
+    Polynomial poly
+);
+
+void print_expr_tree(
     FILE *stream,
     ExprTree tree
 );
 
-void expr_print_tree(
+void print_expr_inline(
     FILE *stream,
     ExprTree tree
 );
