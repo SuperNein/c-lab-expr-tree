@@ -1,5 +1,5 @@
-#ifndef TOK_VECTOR_H
-#define TOK_VECTOR_H
+#ifndef EXPR_VECTOR_H
+#define EXPR_VECTOR_H
 
 #include <stddef.h>
 
