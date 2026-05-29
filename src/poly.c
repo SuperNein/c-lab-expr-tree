@@ -1,4 +1,5 @@
 #include <string.h>
+#include <math.h>
 
 #include "poly.h"
 
@@ -69,7 +70,6 @@ Polynomial poly_add(
     );
 
     for (size_t i = 0; i < max_size; ++i) {
-
         ExprTree left = poly_get_safe(a, i);
         ExprTree right = poly_get_safe(b, i);
 
@@ -123,14 +123,14 @@ Polynomial poly_mul(
     );
 
     for (size_t i = 0; i < a->size; ++i) {
-        ExprTree left = expr_vector_get(a, i);
+        ExprTree left = poly_get_safe(a, i);
 
         if (!left) {
             continue;
         }
 
         for (size_t j = 0; j < b->size; ++j) {
-            ExprTree right = expr_vector_get(b, j);
+            ExprTree right = poly_get_safe(b, j);
 
             if (!right) {
                 continue;
@@ -155,14 +155,19 @@ Polynomial poly_mul(
                 );
             }
             else {
+
+                ExprTree sum = make_operator(
+                        '+',
+                        expr_tree_copy(current),
+                        product
+                    );
+
+                expr_tree_destroy(current);
+
                 expr_vector_set(
                     &result,
                     i + j,
-                    make_operator(
-                        '+',
-                        current,
-                        product
-                    )
+                    sum
                 );
             }
         }
@@ -251,7 +256,7 @@ Polynomial poly_from_expr(ExprTree tree) {
         return result;
     }
 
-    // oper
+    // operator
     if (tok_is_operator(tok)) {
         Polynomial left = poly_from_expr(
                 tree->left
@@ -262,14 +267,19 @@ Polynomial poly_from_expr(ExprTree tree) {
             );
 
         switch (tok.data.op) {
-            case '+':
-                return poly_add(
-                    &left,
-                    &right
-                );
+            case '+': {
+                Polynomial res = poly_add(
+                        &left,
+                        &right
+                    );
+
+                expr_vector_destroy(&left);
+                expr_vector_destroy(&right);
+
+                return res;
+            }
 
             case '-': {
-
                 Polynomial neg = expr_vector_create();
 
                 poly_ensure_size(
@@ -282,7 +292,6 @@ Polynomial poly_from_expr(ExprTree tree) {
                     i < right.size;
                     ++i
                 ) {
-
                     ExprTree coef = expr_vector_get(
                             &right,
                             i
@@ -291,7 +300,6 @@ Polynomial poly_from_expr(ExprTree tree) {
                     if (!coef) {
                         continue;
                     }
-
                     expr_vector_set(
                         &neg,
                         i,
@@ -303,17 +311,29 @@ Polynomial poly_from_expr(ExprTree tree) {
                     );
                 }
 
-                return poly_add(
-                    &left,
-                    &neg
-                );
+                Polynomial res = poly_add(
+                        &left,
+                        &neg
+                    );
+
+                expr_vector_destroy(&left);
+                expr_vector_destroy(&right);
+                expr_vector_destroy(&neg);
+
+                return res;
             }
 
-            case '*':
-                return poly_mul(
-                    &left,
-                    &right
-                );
+            case '*': {
+                Polynomial res = poly_mul(
+                        &left,
+                        &right
+                    );
+
+                expr_vector_destroy(&left);
+                expr_vector_destroy(&right);
+
+                return res;
+            }
 
             case '^': {
                 if (
@@ -322,23 +342,54 @@ Polynomial poly_from_expr(ExprTree tree) {
                         tree->right->token
                     )
                 ) {
+
+                    expr_vector_destroy(&left);
+                    expr_vector_destroy(&right);
+
                     return result;
                 }
 
-                int power =
-                    (int)
+                double raw_power =
                     tree->right
                         ->token
                         .data
                         .value;
 
-                return poly_pow(
-                    &left,
-                    power
-                );
+                if (
+                    floor(raw_power)
+                    != raw_power
+                ) {
+
+                    expr_vector_destroy(&left);
+                    expr_vector_destroy(&right);
+
+                    return result;
+                }
+
+                int power = (int)raw_power;
+
+                if (power < 0) {
+                    expr_vector_destroy(&left);
+                    expr_vector_destroy(&right);
+
+                    return result;
+                }
+
+                Polynomial res = poly_pow(
+                        &left,
+                        power
+                    );
+
+                expr_vector_destroy(&left);
+                expr_vector_destroy(&right);
+
+                return res;
             }
 
             default:
+                expr_vector_destroy(&left);
+                expr_vector_destroy(&right);
+
                 return result;
         }
     }
